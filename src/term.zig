@@ -2,26 +2,25 @@ const std = @import("std");
 const os = std.os;
 const system = os.system;
 const errors = @import("errors.zig");
-
-var orig_termios: os.termios = undefined;
+const state = @import("state.zig");
 
 var stdin = std.io.getStdIn();
 var stdout = std.out.getStdOut();
 
 pub fn disableRaw() void {
-    os.tcsetattr(stdin.handle, os.TCSA.FLUSH, orig_termios) catch |err| {
+    os.tcsetattr(stdin.handle, os.TCSA.FLUSH, state.S.termios) catch |err| {
         errors.printWrapped("can't disable raw mode", err);
         os.exit(1);
     };
 }
 
 pub fn enableRaw() void {
-    orig_termios = os.tcgetattr(stdin.handle) catch |err| {
+    state.S.termios = os.tcgetattr(stdin.handle) catch |err| {
         errors.printWrapped("can't get termios attr", err);
         os.exit(1);
     };
 
-    var raw_termios: os.termios = orig_termios;
+    var raw_termios = state.S.termios;
 
     // ECHO - при нажатии на кнопку она не появляется в терминали
     // ICANON - читаем посимвольно а не после нажатия на энтер

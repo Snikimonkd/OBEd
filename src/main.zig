@@ -4,20 +4,14 @@ const system = os.system;
 
 const term = @import("term.zig");
 const editor = @import("editor.zig");
-
-var stdin = std.io.getStdIn();
-var stdout = std.out.getStdOut();
-
-var orig_termios: os.termios = undefined;
-
-pub fn controlKey(c: u8) u8 {
-    return c & 0x1f;
-}
+const state = @import("state.zig");
 
 pub fn main() !void {
+    state.initState();
     term.enableRaw();
     defer (term.disableRaw());
     while (true) {
+        editor.refreshScreen();
         editor.processKey();
     }
     return;
