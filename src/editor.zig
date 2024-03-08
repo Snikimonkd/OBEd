@@ -52,7 +52,7 @@ fn moveCursor(key: Key) void {
             }
         },
         Key.pg_up => {
-            var delta = state.S.rows / 2;
+            const delta = state.S.rows / 2;
             if (state.S.y >= delta) {
                 state.S.y = state.S.y - delta;
             } else {
@@ -60,7 +60,7 @@ fn moveCursor(key: Key) void {
             }
         },
         Key.pg_down => {
-            var delta = state.S.rows / 2;
+            const delta = state.S.rows / 2;
             if (state.S.y < state.S.rows - delta) {
                 state.S.y = state.S.y + delta;
             } else {
@@ -78,7 +78,7 @@ fn moveCursor(key: Key) void {
 }
 
 fn welcomeMsg() void {
-    var msg = "OBEd -- version 0.0.1";
+    const msg = "OBEd -- version 0.0.1";
     var offset: i32 = @divTrunc((@as(i32, state.S.cols) - @as(i32, msg.len)), 2);
     offset = if (offset < 0) 0 else offset;
 
@@ -153,7 +153,7 @@ fn readKey() u16 {
 
     if (c[0] == '\x1b') {
         var seq: [3]u8 = undefined;
-        var val = (stdin.read(&seq)) catch |err| {
+        const val = (stdin.read(&seq)) catch |err| {
             errors.printWrapped("can't read special symbols", err);
             os.exit(1);
         };
@@ -254,7 +254,7 @@ fn readKey() u16 {
 }
 
 pub fn processKey() void {
-    var c = readKey();
+    const c = readKey();
 
     switch (c) {
         ctrlQ => {
