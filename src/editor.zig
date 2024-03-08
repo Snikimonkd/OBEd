@@ -9,7 +9,19 @@ const stdin = std.io.getStdIn();
 const stdout = std.io.getStdOut();
 var bufferedStdout = std.io.bufferedWriter(stdout.writer());
 
-const Key = enum(u16) { up = 1000, down = 1001, left = 1002, right = 1003, pg_up = 1004, pg_down = 1005 };
+// first and last - technical values to handle all enum values in switch cases like this: first...last
+const Key = enum(u16) {
+    up = 1001,
+    down = 1002,
+    left = 1003,
+    right = 1004,
+    pg_up = 1005,
+    pg_down = 1006,
+    home = 1007,
+    end = 1008,
+
+    delete = 2001,
+};
 
 fn controlKey(c: u8) u8 {
     return c & 0x1f;
@@ -55,6 +67,13 @@ fn moveCursor(key: Key) void {
                 state.S.y = state.S.rows - 1;
             }
         },
+        Key.home => {
+            state.S.x = 0;
+        },
+        Key.end => {
+            state.S.x = state.S.cols - 1;
+        },
+        else => {},
     }
 }
 
@@ -141,40 +160,78 @@ fn readKey() u16 {
         if (val < 2) {
             return '\x1b';
         }
-
-        if (seq[0] == '[') {
-            if (seq[1] >= '0' and seq[1] <= '9') {
-                if (seq[2] == '~') {
-                    switch (seq[1]) {
-                        '5' => {
-                            return @intFromEnum(Key.pg_up);
-                        },
-                        '6' => {
-                            return @intFromEnum(Key.pg_down);
-                        },
-                        else => {
-                            return '\x1b';
-                        },
+        switch (seq[0]) {
+            '[' => {
+                if (seq[1] >= '0' and seq[1] <= '9') {
+                    if (seq[2] == '~') {
+                        switch (seq[1]) {
+                            '1' => {
+                                return @intFromEnum(Key.home);
+                            },
+                            '3' => {
+                                return @intFromEnum(Key.delete);
+                            },
+                            '4' => {
+                                return @intFromEnum(Key.end);
+                            },
+                            '5' => {
+                                return @intFromEnum(Key.pg_up);
+                            },
+                            '6' => {
+                                return @intFromEnum(Key.pg_down);
+                            },
+                            '7' => {
+                                return @intFromEnum(Key.home);
+                            },
+                            '8' => {
+                                return @intFromEnum(Key.end);
+                            },
+                            else => {
+                                return '\x1b';
+                            },
+                        }
                     }
                 }
-            }
-            switch (seq[1]) {
-                'A' => {
-                    return @intFromEnum(Key.up);
-                },
-                'B' => {
-                    return @intFromEnum(Key.down);
-                },
-                'C' => {
-                    return @intFromEnum(Key.right);
-                },
-                'D' => {
-                    return @intFromEnum(Key.left);
-                },
-                else => {
-                    return '\x1b';
-                },
-            }
+                switch (seq[1]) {
+                    'A' => {
+                        return @intFromEnum(Key.up);
+                    },
+                    'B' => {
+                        return @intFromEnum(Key.down);
+                    },
+                    'C' => {
+                        return @intFromEnum(Key.right);
+                    },
+                    'D' => {
+                        return @intFromEnum(Key.left);
+                    },
+                    'H' => {
+                        return @intFromEnum(Key.home);
+                    },
+                    'F' => {
+                        return @intFromEnum(Key.end);
+                    },
+                    else => {
+                        return '\x1b';
+                    },
+                }
+            },
+            'O' => {
+                switch (seq[1]) {
+                    'H' => {
+                        return @intFromEnum(Key.home);
+                    },
+                    'F' => {
+                        return @intFromEnum(Key.end);
+                    },
+                    else => {
+                        return '\x1b';
+                    },
+                }
+            },
+            else => {
+                return '\x1b';
+            },
         }
     }
     switch (c[0]) {
@@ -203,9 +260,18 @@ pub fn processKey() void {
         ctrlQ => {
             os.exit(0);
         },
-        @intFromEnum(Key.up), @intFromEnum(Key.down), @intFromEnum(Key.right), @intFromEnum(Key.left), @intFromEnum(Key.pg_up), @intFromEnum(Key.pg_down) => {
+        @intFromEnum(Key.up),
+        @intFromEnum(Key.down),
+        @intFromEnum(Key.left),
+        @intFromEnum(Key.right),
+        @intFromEnum(Key.pg_up),
+        @intFromEnum(Key.pg_down),
+        @intFromEnum(Key.home),
+        @intFromEnum(Key.end),
+        => {
             moveCursor(@enumFromInt(c));
         },
+        @intFromEnum(Key.delete) => {},
         // 0...std.ascii.control_code.us, std.ascii.control_code.del => {
         //     std.debug.print("control num:{d}\r\n", .{c});
         //     return;

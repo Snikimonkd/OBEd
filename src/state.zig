@@ -12,6 +12,9 @@ pub const State = struct {
     cols: u16 = 0,
     x: u16 = 0,
     y: u16 = 0,
+
+    bufr_rows: u32 = 0,
+    row: []u8 = undefined,
 };
 
 pub var S = State{};
