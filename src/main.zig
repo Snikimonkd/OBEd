@@ -5,14 +5,43 @@ const system = os.system;
 const term = @import("term.zig");
 const editor = @import("editor.zig");
 const state = @import("state.zig");
+const logger = @import("logger.zig");
+const errors = @import("errors.zig");
 
 pub fn main() !void {
-    state.initState();
-    term.enableRaw();
-    defer (term.disableRaw());
+    logger.initGlobalLogger() catch |err| {
+        return err;
+    };
+    defer {
+        logger.deinitGlobalLogger();
+    }
+
+    state.initState() catch |err| {
+        return err;
+    };
+    logger.logInfo("state inited");
+
+    term.enableRawMode() catch |err| {
+        return err;
+    };
+    logger.logInfo("raw mode enabled");
+    defer {
+        term.disableRaw();
+        logger.logInfo("raw mode disabled");
+    }
+
     while (true) {
-        editor.refreshScreen();
-        editor.processKey();
+        editor.refreshScreen() catch |err| {
+            return err;
+        };
+        editor.processKey() catch |err| switch (err) {
+            errors.EditorError.Exit => {
+                return;
+            },
+            else => {
+                return err;
+            },
+        };
     }
     return;
 }

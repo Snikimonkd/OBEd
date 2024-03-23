@@ -3,6 +3,7 @@ const os = std.os;
 const system = os.system;
 
 const errors = @import("errors.zig");
+const logger = @import("logger.zig");
 
 var stdout = std.io.getStdOut();
 
@@ -19,7 +20,7 @@ pub const State = struct {
 
 pub var S = State{};
 
-fn getWindowSize(rows: *u16, cols: *u16) void {
+fn getWindowSize(rows: *u16, cols: *u16) errors.EditorError!void {
     var ws = system.winsize{
         .ws_row = undefined,
         .ws_col = undefined,
@@ -27,16 +28,19 @@ fn getWindowSize(rows: *u16, cols: *u16) void {
         .ws_ypixel = undefined,
     };
 
-    var res = system.ioctl(stdout.handle, system.T.IOCGWINSZ, &ws);
+    const res = system.ioctl(stdout.handle, system.T.IOCGWINSZ, &ws);
     if ((res == -1) or (ws.ws_col == 0)) {
-        errors.printWrapped("can't get winsize", undefined);
-        os.exit(1);
+        logger.logError("can't get winsize", error.CantGetWinSize);
+        return error.CantGetWinSize;
     }
 
     cols.* = ws.ws_col;
     rows.* = ws.ws_row;
+    return;
 }
 
-pub fn initState() void {
-    getWindowSize(&S.rows, &S.cols);
+pub fn initState() errors.EditorError!void {
+    getWindowSize(&S.rows, &S.cols) catch |err| {
+        return err;
+    };
 }

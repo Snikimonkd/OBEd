@@ -2,21 +2,21 @@ const std = @import("std");
 const os = std.os;
 const system = os.system;
 const state = @import("state.zig");
+const logger = @import("logger.zig");
 
 const stdin = std.io.getStdIn();
 const stdout = std.io.getStdOut();
 
 pub fn disableRaw() void {
     os.tcsetattr(stdin.handle, os.TCSA.FLUSH, state.S.termios) catch |err| {
-        std.debug.print("can't disable raw mode: {s}\n", .{@errorName(err)});
-        os.exit(1);
+        logger.logError("can't restore terminal", err);
     };
 }
 
-pub fn enableRaw() void {
+pub fn enableRawMode() !void {
     state.S.termios = os.tcgetattr(stdin.handle) catch |err| {
-        std.debug.print("can't get termios attr: {s}\n", .{@errorName(err)});
-        os.exit(1);
+        logger.logError("can't get termios attributes", err);
+        return err;
     };
 
     var raw_termios = state.S.termios;
@@ -42,7 +42,7 @@ pub fn enableRaw() void {
     raw_termios.cflag &= ~(system.CS8);
 
     os.tcsetattr(stdin.handle, os.TCSA.FLUSH, raw_termios) catch |err| {
-        std.debug.print("can't set termios attr: {s}\n", .{@errorName(err)});
-        os.exit(1);
+        logger.logError("can't set termios attributes", err);
+        return err;
     };
 }

@@ -2,8 +2,10 @@ const std = @import("std");
 const os = std.os;
 
 const term = @import("term.zig");
-const errors = @import("errors.zig");
 const state = @import("state.zig");
+
+const logger = @import("logger.zig");
+const errors = @import("errors.zig");
 
 const stdin = std.io.getStdIn();
 const stdout = std.io.getStdOut();
@@ -77,64 +79,68 @@ fn moveCursor(key: Key) void {
     }
 }
 
-fn welcomeMsg() void {
+fn welcomeMsg() !void {
     const msg = "OBEd -- version 0.0.1";
     var offset: i32 = @divTrunc((@as(i32, state.S.cols) - @as(i32, msg.len)), 2);
     offset = if (offset < 0) 0 else offset;
 
     for (0..@intCast(offset)) |_| {
         bufferedStdout.writer().writeAll(" ") catch |err| {
-            errors.printWrapped("can't add whitespaces to welcome msg", err);
-            os.exit(1);
+            logger.logError("can't add whitespaces to welcome msg", err);
+            return err;
         };
     }
     bufferedStdout.writer().writeAll(msg) catch |err| {
-        errors.printWrapped("can't print welcome msg", err);
-        os.exit(1);
+        logger.logError("can't print welcome msg", err);
+        return err;
     };
 }
 
-fn drawRows() void {
+fn drawRows() !void {
     for (0..state.S.rows) |y| {
         bufferedStdout.writer().writeAll("~") catch |err| {
-            errors.printWrapped("can't draw tild on screen", err);
-            os.exit(1);
+            logger.logError("can't draw tild on screen", err);
+            return err;
         };
 
         if (y == state.S.rows / 2) {
-            welcomeMsg();
+            welcomeMsg() catch |err| {
+                return err;
+            };
         }
 
         bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
-            errors.printWrapped("can't clear line", err);
-            os.exit(1);
+            logger.logError("can't clear line", err);
+            return err;
         };
 
         if (y < state.S.rows - 1) {
             bufferedStdout.writer().writeAll("\r\n") catch |err| {
-                errors.printWrapped("can't draw \r\n on screen", err);
-                os.exit(1);
+                logger.logError("can't draw \r\n on screen", err);
+                return err;
             };
         }
     }
 }
 
-pub fn refreshScreen() void {
-    defer bufferedStdout.flush() catch |err| {
-        errors.printWrapped("can't flush stdout", err);
-        os.exit(1);
-    };
-
+pub fn refreshScreen() !void {
     bufferedStdout.writer().writeAll("\x1b[H") catch |err| {
-        errors.printWrapped("can't move cursor to the beggining", err);
-        os.exit(1);
+        logger.logError("can't move cursor to the beggining", err);
+        return err;
     };
 
-    drawRows();
+    drawRows() catch |err| {
+        return err;
+    };
 
     std.fmt.format(bufferedStdout.writer(), "\x1b[{d};{d}H", .{ state.S.y + 1, state.S.x + 1 }) catch |err| {
-        errors.printWrapped("can't move cursor to the beggining", err);
-        os.exit(1);
+        logger.logError("can't move cursor to the beggining", err);
+        return err;
+    };
+
+    bufferedStdout.flush() catch |err| {
+        logger.logError("can't flush stdout", err);
+        return err;
     };
 
     // TODO: insert mode cursor ahspe here
@@ -144,18 +150,18 @@ pub fn refreshScreen() void {
     //    };
 }
 
-fn readKey() u16 {
+fn readKey() !u16 {
     var c: [1]u8 = undefined;
     _ = stdin.read(&c) catch |err| {
-        errors.printWrapped("can't read from stdin", err);
-        os.exit(1);
+        logger.logError("can't read from stdin", err);
+        return err;
     };
 
     if (c[0] == '\x1b') {
         var seq: [3]u8 = undefined;
         const val = (stdin.read(&seq)) catch |err| {
-            errors.printWrapped("can't read special symbols", err);
-            os.exit(1);
+            logger.logError("can't read special symbols", err);
+            return err;
         };
         if (val < 2) {
             return '\x1b';
@@ -253,12 +259,14 @@ fn readKey() u16 {
     }
 }
 
-pub fn processKey() void {
-    const c = readKey();
+pub fn processKey() !void {
+    const c = readKey() catch |err| {
+        return err;
+    };
 
     switch (c) {
         ctrlQ => {
-            os.exit(0);
+            return errors.EditorError.Exit;
         },
         @intFromEnum(Key.up),
         @intFromEnum(Key.down),
