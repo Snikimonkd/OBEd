@@ -105,20 +105,8 @@ fn drawRows() !void {
                 return err;
             };
 
-            if (y == state.S.rows / 2) {
+            if (state.S.num_lines == 0 and y == state.S.rows / 2) {
                 welcomeMsg() catch |err| {
-                    return err;
-                };
-            }
-
-            bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
-                logger.logError("can't clear line", err);
-                return err;
-            };
-
-            if (y < state.S.rows - 1) {
-                bufferedStdout.writer().writeAll("\r\n") catch |err| {
-                    logger.logError("can't draw \\r\\n on screen", err);
                     return err;
                 };
             }
@@ -129,6 +117,17 @@ fn drawRows() !void {
             }
             bufferedStdout.writer().writeAll(state.S.lines.items[y].items) catch |err| {
                 logger.logError("can't write row on the screen", err);
+                return err;
+            };
+        }
+
+        bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
+            logger.logError("can't clear line", err);
+            return err;
+        };
+        if (y < state.S.rows - 1) {
+            bufferedStdout.writer().writeAll("\r\n") catch |err| {
+                logger.logError("can't draw \\r\\n on screen", err);
                 return err;
             };
         }
@@ -326,11 +325,17 @@ pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
                 },
             }
         };
-        logger.logInfof("read line {}", line);
-        state.S.num_lines += 1;
-        state.S.lines.append(line) catch |err| {
-            logger.logError("can't append line", err);
-            return err;
-        };
+        if (flag) {
+            state.S.num_lines += 1;
+            //        line.appendSlice("\r\n") catch |err| {
+            //            logger.logError("can't append \\r\\n to line end", err);
+            //            return err;
+            //        };
+            state.S.lines.append(line) catch |err| {
+                logger.logError("can't append line", err);
+                return err;
+            };
+            logger.logInfof("lines: |{}|", line);
+        }
     }
 }
