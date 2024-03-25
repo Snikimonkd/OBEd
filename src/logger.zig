@@ -2,6 +2,7 @@ const std = @import("std");
 const os = std.os;
 
 const errors = @import("errors.zig");
+const mem = std.mem;
 
 pub const logger = struct {
     log_file: std.fs.File = undefined,
@@ -18,16 +19,24 @@ pub const logger = struct {
         self.log_file.close();
     }
 
-    pub fn logInfo(self: logger, str: []const u8) void {
-        std.fmt.format(self.log_file.writer(), "{s}\r\n", .{str}) catch |werr| {
+    pub fn logInfo(self: logger, comptime str: []const u8) void {
+        std.fmt.format(self.log_file.writer(), str ++ "\r\n", .{}) catch |werr| {
             std.debug.print("{s}: {s}\n", .{ "can't log info", @errorName(werr) });
-            os.exit(1);
+            os.linux.exit(1);
         };
     }
-    pub fn logError(self: logger, str: []const u8, err: anyerror) void {
-        std.fmt.format(self.log_file.writer(), "{s}: {s}\r\n", .{ str, @errorName(err) }) catch |werr| {
+
+    pub fn logInfof(self: logger, comptime fmt: []const u8, args: anytype) void {
+        std.fmt.format(self.log_file.writer(), fmt ++ "\r\n", .{args}) catch |werr| {
+            std.debug.print("{s}: {s}\n", .{ "can't log info", @errorName(werr) });
+            os.linux.exit(1);
+        };
+    }
+
+    pub fn logError(self: logger, comptime str: []const u8, err: anyerror) void {
+        std.fmt.format(self.log_file.writer(), "{s}: {s}" ++ "\r\n", .{ str, @errorName(err) }) catch |werr| {
             std.debug.print("{s}: {s}\n", .{ "can't log error:", @errorName(werr) });
-            os.exit(1);
+            os.linux.exit(1);
         };
     }
 };
@@ -47,10 +56,14 @@ pub fn deinitGlobalLogger() void {
     l.deinit();
 }
 
-pub fn logInfo(str: []const u8) void {
+pub fn logInfo(comptime str: []const u8) void {
     l.logInfo(str);
 }
 
-pub fn logError(str: []const u8, err: anyerror) void {
+pub fn logInfof(comptime fmt: []const u8, args: anytype) void {
+    l.logInfof(fmt, args);
+}
+
+pub fn logError(comptime str: []const u8, err: anyerror) void {
     l.logError(str, err);
 }

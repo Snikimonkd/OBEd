@@ -11,7 +11,6 @@ const stdin = std.io.getStdIn();
 const stdout = std.io.getStdOut();
 var bufferedStdout = std.io.bufferedWriter(stdout.writer());
 
-// first and last - technical values to handle all enum values in switch cases like this: first...last
 const Key = enum(u16) {
     up = 1001,
     down = 1002,
@@ -75,7 +74,9 @@ fn moveCursor(key: Key) void {
         Key.end => {
             state.S.x = state.S.cols - 1;
         },
-        else => {},
+        else => {
+            unreachable;
+        },
     }
 }
 
@@ -98,25 +99,36 @@ fn welcomeMsg() !void {
 
 fn drawRows() !void {
     for (0..state.S.rows) |y| {
-        bufferedStdout.writer().writeAll("~") catch |err| {
-            logger.logError("can't draw tild on screen", err);
-            return err;
-        };
-
-        if (y == state.S.rows / 2) {
-            welcomeMsg() catch |err| {
+        if (y >= state.S.num_lines) {
+            bufferedStdout.writer().writeAll("~") catch |err| {
+                logger.logError("can't draw tild on screen", err);
                 return err;
             };
-        }
 
-        bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
-            logger.logError("can't clear line", err);
-            return err;
-        };
+            if (y == state.S.rows / 2) {
+                welcomeMsg() catch |err| {
+                    return err;
+                };
+            }
 
-        if (y < state.S.rows - 1) {
-            bufferedStdout.writer().writeAll("\r\n") catch |err| {
-                logger.logError("can't draw \r\n on screen", err);
+            bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
+                logger.logError("can't clear line", err);
+                return err;
+            };
+
+            if (y < state.S.rows - 1) {
+                bufferedStdout.writer().writeAll("\r\n") catch |err| {
+                    logger.logError("can't draw \\r\\n on screen", err);
+                    return err;
+                };
+            }
+        } else {
+            var len: usize = state.S.lines.items.len;
+            if (len > state.S.cols) {
+                len = state.S.cols;
+            }
+            bufferedStdout.writer().writeAll(state.S.lines.items[y].items) catch |err| {
+                logger.logError("can't write row on the screen", err);
                 return err;
             };
         }
@@ -288,5 +300,37 @@ pub fn processKey() !void {
             // std.debug.print("simple num:{d}, char:{c}\r\n", .{ c, c });
             return;
         },
+    }
+}
+
+pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
+    const file = std.fs.cwd().openFile(file_name, .{}) catch |err| {
+        return err;
+    };
+    defer file.close();
+
+    var buf_reader = std.io.bufferedReader(file.reader());
+    const reader = buf_reader.reader();
+
+    var flag: bool = true;
+    while (flag) {
+        var line = std.ArrayList(u8).init(allocator);
+        reader.streamUntilDelimiter(line.writer(), '\n', null) catch |err| {
+            switch (err) {
+                error.EndOfStream => {
+                    flag = false;
+                },
+                else => {
+                    logger.logError("can't read line from file", err);
+                    return err;
+                },
+            }
+        };
+        logger.logInfof("read line {}", line);
+        state.S.num_lines += 1;
+        state.S.lines.append(line) catch |err| {
+            logger.logError("can't append line", err);
+            return err;
+        };
     }
 }

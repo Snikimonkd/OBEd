@@ -14,8 +14,8 @@ pub const State = struct {
     x: u16 = 0,
     y: u16 = 0,
 
-    bufr_rows: u32 = 0,
-    row: []u8 = undefined,
+    num_lines: u32 = 0,
+    lines: std.ArrayList(std.ArrayList(u8)) = undefined,
 };
 
 pub var S = State{};
@@ -39,8 +39,14 @@ fn getWindowSize(rows: *u16, cols: *u16) errors.EditorError!void {
     return;
 }
 
-pub fn initState() errors.EditorError!void {
+pub fn initState(allocator: std.mem.Allocator) errors.EditorError!void {
+    S.lines = std.ArrayList(std.ArrayList(u8)).init(allocator);
     getWindowSize(&S.rows, &S.cols) catch |err| {
         return err;
     };
+}
+
+pub fn deinitState() void {
+    for (S.lines.items) |line| line.deinit();
+    S.lines.deinit();
 }

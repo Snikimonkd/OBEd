@@ -1,6 +1,5 @@
 const std = @import("std");
 const os = std.os;
-const system = os.system;
 
 const term = @import("term.zig");
 const editor = @import("editor.zig");
@@ -16,9 +15,22 @@ pub fn main() !void {
         logger.deinitGlobalLogger();
     }
 
-    state.initState() catch |err| {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        const leak = gpa.deinit();
+        switch (leak) {
+            std.heap.Check.leak => {
+                std.debug.print("memory leak detected {}\n", .{leak});
+            },
+            std.heap.Check.ok => {},
+        }
+    }
+    const allocator = gpa.allocator();
+
+    state.initState(allocator) catch |err| {
         return err;
     };
+    defer state.deinitState();
     logger.logInfo("state inited");
 
     term.enableRawMode() catch |err| {
@@ -28,6 +40,19 @@ pub fn main() !void {
     defer {
         term.disableRaw();
         logger.logInfo("raw mode disabled");
+    }
+
+    var args = std.process.argsAlloc(allocator) catch |err| {
+        logger.logError("can't init args", err);
+        return err;
+    };
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len >= 2) {
+        const filename: []const u8 = args[1];
+        editor.editorOpen(filename, allocator) catch |err| {
+            return err;
+        };
     }
 
     while (true) {
