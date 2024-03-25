@@ -38,7 +38,7 @@ fn moveCursor(key: Key) void {
             }
         },
         Key.down => {
-            if (state.S.y < state.S.rows - 1) {
+            if (state.S.y < state.S.num_lines) {
                 state.S.y = state.S.y + 1;
             }
         },
@@ -99,7 +99,8 @@ fn welcomeMsg() !void {
 
 fn drawRows() !void {
     for (0..state.S.rows) |y| {
-        if (y >= state.S.num_lines) {
+        const filerow = y + state.S.offset;
+        if (filerow >= state.S.num_lines) {
             bufferedStdout.writer().writeAll("~") catch |err| {
                 logger.logError("can't draw tild on screen", err);
                 return err;
@@ -111,14 +112,16 @@ fn drawRows() !void {
                 };
             }
         } else {
-            var len: usize = state.S.lines.items.len;
+            var len: usize = state.S.lines.items[filerow].items.len;
             if (len > state.S.cols) {
                 len = state.S.cols;
             }
-            bufferedStdout.writer().writeAll(state.S.lines.items[y].items) catch |err| {
-                logger.logError("can't write row on the screen", err);
-                return err;
-            };
+            if (len != 0) {
+                bufferedStdout.writer().writeAll(state.S.lines.items[filerow].items[0..len]) catch |err| {
+                    logger.logError("can't write row on the screen", err);
+                    return err;
+                };
+            }
         }
 
         bufferedStdout.writer().writeAll("\x1b[K") catch |err| {
@@ -134,7 +137,18 @@ fn drawRows() !void {
     }
 }
 
+fn scroll() void {
+    if (state.S.y < state.S.offset) {
+        state.S.offset = state.S.y;
+    }
+    if (state.S.y >= state.S.offset + state.S.rows) {
+        state.S.offset = state.S.y - state.S.rows + 1;
+    }
+}
+
 pub fn refreshScreen() !void {
+    scroll();
+
     bufferedStdout.writer().writeAll("\x1b[H") catch |err| {
         logger.logError("can't move cursor to the beggining", err);
         return err;
@@ -144,8 +158,8 @@ pub fn refreshScreen() !void {
         return err;
     };
 
-    std.fmt.format(bufferedStdout.writer(), "\x1b[{d};{d}H", .{ state.S.y + 1, state.S.x + 1 }) catch |err| {
-        logger.logError("can't move cursor to the beggining", err);
+    std.fmt.format(bufferedStdout.writer(), "\x1b[{d};{d}H", .{ state.S.y + 1 - state.S.offset, state.S.x + 1 }) catch |err| {
+        logger.logError("can't move cursor to its position", err);
         return err;
     };
 
@@ -335,7 +349,6 @@ pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
                 logger.logError("can't append line", err);
                 return err;
             };
-            logger.logInfof("lines: |{}|", line);
         }
     }
 }
