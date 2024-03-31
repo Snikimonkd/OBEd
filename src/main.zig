@@ -59,7 +59,7 @@ pub fn main() !void {
         editor.refreshScreen() catch |err| {
             return err;
         };
-        editor.processKey() catch |err| switch (err) {
+        editor.processKey(allocator) catch |err| switch (err) {
             errors.EditorError.Exit => {
                 return;
             },

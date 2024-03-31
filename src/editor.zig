@@ -11,17 +11,15 @@ const stdin = std.io.getStdIn();
 const stdout = std.io.getStdOut();
 var bufferedStdout = std.io.bufferedWriter(stdout.writer());
 
-const Key = enum(u16) {
-    up = 1001,
-    down = 1002,
-    left = 1003,
-    right = 1004,
-    pg_up = 1005,
-    pg_down = 1006,
-    home = 1007,
-    end = 1008,
+const Key = enum(u8) {
+    backspace = 127,
 
-    delete = 2001,
+    up = 201,
+    down = 202,
+    left = 203,
+    right = 204,
+
+    delete = 205,
 };
 
 fn controlKey(c: u8) u8 {
@@ -29,8 +27,12 @@ fn controlKey(c: u8) u8 {
 }
 
 const ctrlQ = controlKey('q');
+const ctrlH = controlKey('h');
+const ctrlS = controlKey('s');
+const ctrlL = controlKey('l');
 
 fn moveCursor(key: Key) void {
+    var row: ?std.ArrayList(u8) = if (state.S.y >= state.S.num_lines) null else state.S.lines.items[state.S.y];
     switch (key) {
         Key.left => {
             if (state.S.x >= 1) {
@@ -48,35 +50,19 @@ fn moveCursor(key: Key) void {
             }
         },
         Key.right => {
-            if (state.S.x < state.S.cols - 1) {
+            if (row != null and state.S.x < row.?.items.len) {
                 state.S.x = state.S.x + 1;
             }
-        },
-        Key.pg_up => {
-            const delta = state.S.rows / 2;
-            if (state.S.y >= delta) {
-                state.S.y = state.S.y - delta;
-            } else {
-                state.S.y = 0;
-            }
-        },
-        Key.pg_down => {
-            const delta = state.S.rows / 2;
-            if (state.S.y < state.S.rows - delta) {
-                state.S.y = state.S.y + delta;
-            } else {
-                state.S.y = state.S.rows - 1;
-            }
-        },
-        Key.home => {
-            state.S.x = 0;
-        },
-        Key.end => {
-            state.S.x = state.S.cols - 1;
         },
         else => {
             unreachable;
         },
+    }
+
+    row = if (state.S.y >= state.S.num_lines) null else state.S.lines.items[state.S.y];
+    const rowlen: u16 = if (row != null) @intCast(row.?.items.len) else 0;
+    if (state.S.x > rowlen) {
+        state.S.x = rowlen;
     }
 }
 
@@ -99,7 +85,7 @@ fn welcomeMsg() !void {
 
 fn drawRows() !void {
     for (0..state.S.rows) |y| {
-        const filerow = y + state.S.offset;
+        const filerow = y + state.S.row_offset;
         if (filerow >= state.S.num_lines) {
             bufferedStdout.writer().writeAll("~") catch |err| {
                 logger.logError("can't draw tild on screen", err);
@@ -112,12 +98,15 @@ fn drawRows() !void {
                 };
             }
         } else {
-            var len: usize = state.S.lines.items[filerow].items.len;
+            var len: i64 = @as(i64, @intCast(state.S.lines.items[filerow].items.len)) - state.S.col_offset;
+            if (len < 0) {
+                len = 0;
+            }
             if (len > state.S.cols) {
                 len = state.S.cols;
             }
             if (len != 0) {
-                bufferedStdout.writer().writeAll(state.S.lines.items[filerow].items[0..len]) catch |err| {
+                bufferedStdout.writer().writeAll(state.S.lines.items[filerow].items[state.S.col_offset..(state.S.col_offset + @as(u16, @intCast(len)))]) catch |err| {
                     logger.logError("can't write row on the screen", err);
                     return err;
                 };
@@ -138,11 +127,17 @@ fn drawRows() !void {
 }
 
 fn scroll() void {
-    if (state.S.y < state.S.offset) {
-        state.S.offset = state.S.y;
+    if (state.S.y < state.S.row_offset) {
+        state.S.row_offset = state.S.y;
     }
-    if (state.S.y >= state.S.offset + state.S.rows) {
-        state.S.offset = state.S.y - state.S.rows + 1;
+    if (state.S.y >= state.S.row_offset + state.S.rows) {
+        state.S.row_offset = state.S.y - state.S.rows + 1;
+    }
+    if (state.S.x < state.S.col_offset) {
+        state.S.col_offset = state.S.x;
+    }
+    if (state.S.x >= state.S.col_offset + state.S.cols) {
+        state.S.col_offset = state.S.x - state.S.cols + 1;
     }
 }
 
@@ -158,7 +153,7 @@ pub fn refreshScreen() !void {
         return err;
     };
 
-    std.fmt.format(bufferedStdout.writer(), "\x1b[{d};{d}H", .{ state.S.y + 1 - state.S.offset, state.S.x + 1 }) catch |err| {
+    std.fmt.format(bufferedStdout.writer(), "\x1b[{d};{d}H", .{ state.S.y + 1 - state.S.row_offset, state.S.x + 1 - state.S.col_offset }) catch |err| {
         logger.logError("can't move cursor to its position", err);
         return err;
     };
@@ -175,7 +170,7 @@ pub fn refreshScreen() !void {
     //    };
 }
 
-fn readKey() !u16 {
+fn readKey() !u8 {
     var c: [1]u8 = undefined;
     _ = stdin.read(&c) catch |err| {
         logger.logError("can't read from stdin", err);
@@ -196,26 +191,8 @@ fn readKey() !u16 {
                 if (seq[1] >= '0' and seq[1] <= '9') {
                     if (seq[2] == '~') {
                         switch (seq[1]) {
-                            '1' => {
-                                return @intFromEnum(Key.home);
-                            },
                             '3' => {
                                 return @intFromEnum(Key.delete);
-                            },
-                            '4' => {
-                                return @intFromEnum(Key.end);
-                            },
-                            '5' => {
-                                return @intFromEnum(Key.pg_up);
-                            },
-                            '6' => {
-                                return @intFromEnum(Key.pg_down);
-                            },
-                            '7' => {
-                                return @intFromEnum(Key.home);
-                            },
-                            '8' => {
-                                return @intFromEnum(Key.end);
                             },
                             else => {
                                 return '\x1b';
@@ -236,25 +213,6 @@ fn readKey() !u16 {
                     'D' => {
                         return @intFromEnum(Key.left);
                     },
-                    'H' => {
-                        return @intFromEnum(Key.home);
-                    },
-                    'F' => {
-                        return @intFromEnum(Key.end);
-                    },
-                    else => {
-                        return '\x1b';
-                    },
-                }
-            },
-            'O' => {
-                switch (seq[1]) {
-                    'H' => {
-                        return @intFromEnum(Key.home);
-                    },
-                    'F' => {
-                        return @intFromEnum(Key.end);
-                    },
                     else => {
                         return '\x1b';
                     },
@@ -266,30 +224,134 @@ fn readKey() !u16 {
         }
     }
     switch (c[0]) {
-        'k' => {
-            return @intFromEnum(Key.up);
-        },
-        'j' => {
-            return @intFromEnum(Key.down);
-        },
-        'l' => {
-            return @intFromEnum(Key.right);
-        },
-        'h' => {
-            return @intFromEnum(Key.left);
-        },
         else => {
             return c[0];
         },
     }
 }
 
-pub fn processKey() !void {
+pub fn lineInsertChar(line: *std.ArrayList(u8), at: u16, c: u8) !void {
+    var pos = at;
+    if (pos < 0 or pos > line.items.len) {
+        pos = @intCast(line.items.len);
+    }
+    line.insert(pos, c) catch |err| {
+        logger.logError("can't insert char", err);
+        return err;
+    };
+}
+
+pub fn lineDeleteChar(line: *std.ArrayList(u8), at: u16) !void {
+    if (at < 0 or at >= line.items.len) {
+        return;
+    }
+    _ = line.orderedRemove(at);
+    // line.resize(line.items.len - 1) catch |err| {
+    //     logger.logError("can't resize", err);
+    //     return err;
+    // };
+    logger.logInfof("line after remove: len: {d}", line.items.len);
+}
+
+pub fn delChar() !void {
+    if (state.S.y == state.S.num_lines) {
+        return;
+    }
+    if (state.S.x == 0 and state.S.y == 0) {
+        return;
+    }
+
+    var line = &state.S.lines.items[state.S.y];
+    if (state.S.x > 0) {
+        lineDeleteChar(line, state.S.x - 1) catch |err| {
+            return err;
+        };
+        state.S.x -= 1;
+    } else {
+        state.S.x = @intCast(state.S.lines.items[state.S.y - 1].items.len);
+        rowAppendString(&state.S.lines.items[state.S.y - 1], line.items) catch |err| {
+            return err;
+        };
+        delRow(state.S.y);
+        state.S.y -= 1;
+    }
+}
+
+pub fn insertChar(c: u8, allocator: std.mem.Allocator) !void {
+    if (state.S.y == state.S.num_lines) {
+        state.S.lines.append(std.ArrayList(u8).init(allocator)) catch |err| {
+            logger.logError("can't add line", err);
+            return err;
+        };
+    }
+    lineInsertChar(&state.S.lines.items[state.S.y], state.S.x, c) catch |err| {
+        return err;
+    };
+    state.S.x += 1;
+}
+
+pub fn delRow(at: u16) void {
+    if (at < 0 or at >= state.S.num_lines) {
+        return;
+    }
+    state.S.lines.items[at].deinit();
+    _ = state.S.lines.orderedRemove(at);
+    state.S.num_lines -= 1;
+}
+
+pub fn rowAppendString(line: *std.ArrayList(u8), chrs: []u8) !void {
+    line.appendSlice(chrs) catch |err| {
+        logger.logError("can't appen two rows", err);
+        return err;
+    };
+}
+
+pub fn save() !void {
+    const file = std.fs.cwd().createFile(state.S.file_name, std.fs.File.CreateFlags{ .read = false, .truncate = true }) catch |err| {
+        logger.logError("can't open file to save", err);
+        return err;
+    };
+    defer file.close();
+
+    for (state.S.lines.items) |line| {
+        file.writer().writeAll(line.items) catch |err| {
+            logger.logError("can't save file", err);
+            return err;
+        };
+        file.writer().writeAll("\n") catch |err| {
+            logger.logError("can't save file", err);
+            return err;
+        };
+    }
+}
+
+pub fn processKey(allocator: std.mem.Allocator) !void {
     const c = readKey() catch |err| {
         return err;
     };
 
     switch (c) {
+        '\r' => {
+            // todo
+            return;
+        },
+
+        ctrlS => {
+            save() catch |err| {
+                return err;
+            };
+        },
+
+        @intFromEnum(Key.delete),
+        @intFromEnum(Key.backspace),
+        ctrlH,
+        => {
+            delChar() catch |err| {
+                return err;
+            };
+            return;
+        },
+
         ctrlQ => {
             return errors.EditorError.Exit;
         },
@@ -297,26 +359,28 @@ pub fn processKey() !void {
         @intFromEnum(Key.down),
         @intFromEnum(Key.left),
         @intFromEnum(Key.right),
-        @intFromEnum(Key.pg_up),
-        @intFromEnum(Key.pg_down),
-        @intFromEnum(Key.home),
-        @intFromEnum(Key.end),
         => {
             moveCursor(@enumFromInt(c));
+            return;
         },
-        @intFromEnum(Key.delete) => {},
-        // 0...std.ascii.control_code.us, std.ascii.control_code.del => {
-        //     std.debug.print("control num:{d}\r\n", .{c});
-        //     return;
-        // },
+
+        ctrlL => {
+            return;
+        },
+        20...126 => {
+            insertChar(c, allocator) catch |err| {
+                return err;
+            };
+            return;
+        },
         else => {
-            // std.debug.print("simple num:{d}, char:{c}\r\n", .{ c, c });
             return;
         },
     }
 }
 
 pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
+    state.S.file_name = file_name;
     const file = std.fs.cwd().openFile(file_name, .{}) catch |err| {
         return err;
     };
@@ -345,6 +409,10 @@ pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
             //            logger.logError("can't append \\r\\n to line end", err);
             //            return err;
             //        };
+            //            line.append('\x00') catch |err| {
+            //                logger.logError("can't append null byte", err);
+            //                return err;
+            //            };
             state.S.lines.append(line) catch |err| {
                 logger.logError("can't append line", err);
                 return err;

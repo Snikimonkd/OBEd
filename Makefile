@@ -1,7 +1,7 @@
-b:
+build:
 	zig build
 
-r:b
+run:build
 	./zig-out/bin/obed
 
 t:

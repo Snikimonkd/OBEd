@@ -14,9 +14,13 @@ pub const State = struct {
     x: u16 = 0,
     y: u16 = 0,
 
-    offset: u16 = 0,
+    row_offset: u16 = 0,
+    col_offset: u16 = 0,
+
     num_lines: u32 = 0,
     lines: std.ArrayList(std.ArrayList(u8)) = undefined,
+
+    file_name: []const u8 = "",
 };
 
 pub var S = State{};
