@@ -246,10 +246,6 @@ pub fn lineDeleteChar(line: *std.ArrayList(u8), at: u16) !void {
         return;
     }
     _ = line.orderedRemove(at);
-    // line.resize(line.items.len - 1) catch |err| {
-    //     logger.logError("can't resize", err);
-    //     return err;
-    // };
     logger.logInfof("line after remove: len: {d}", line.items.len);
 }
 
@@ -277,12 +273,47 @@ pub fn delChar() !void {
     }
 }
 
+pub fn insertNewLine(allocator: std.mem.Allocator) !void {
+    if (state.S.x == 0) {
+        state.S.lines.insert(state.S.y, std.ArrayList(u8).init(allocator)) catch |err| {
+            logger.logError("can't add line", err);
+            return err;
+        };
+    } else {
+        if (state.S.y == state.S.num_lines) {
+            state.S.lines.append(std.ArrayList(u8).init(allocator)) catch |err| {
+                logger.logError("can't add line", err);
+                return err;
+            };
+        } else {
+            state.S.lines.insert(state.S.y + 1, std.ArrayList(u8).init(allocator)) catch |err| {
+                logger.logError("can't add line", err);
+                return err;
+            };
+        }
+
+        state.S.lines.items[state.S.y + 1].appendSlice(state.S.lines.items[state.S.y].items[state.S.x..]) catch |err| {
+            logger.logError("can't append last part of line to the next string", err);
+            return err;
+        };
+
+        state.S.lines.items[state.S.y].items = state.S.lines.items[state.S.y].items[0..state.S.x];
+        state.S.lines.items[state.S.y].items.len = state.S.x;
+    }
+    state.S.num_lines += 1;
+    state.S.y += 1;
+    state.S.x = 0;
+}
+
 pub fn insertChar(c: u8, allocator: std.mem.Allocator) !void {
+    logger.logInfof("state {d}", state.S.y);
+    logger.logInfof("num lines {d}", state.S.num_lines);
     if (state.S.y == state.S.num_lines) {
         state.S.lines.append(std.ArrayList(u8).init(allocator)) catch |err| {
             logger.logError("can't add line", err);
             return err;
         };
+        state.S.num_lines += 1;
     }
     lineInsertChar(&state.S.lines.items[state.S.y], state.S.x, c) catch |err| {
         return err;
@@ -332,7 +363,9 @@ pub fn processKey(allocator: std.mem.Allocator) !void {
 
     switch (c) {
         '\r' => {
-            // todo
+            insertNewLine(allocator) catch |err| {
+                return err;
+            };
             return;
         },
 
@@ -404,19 +437,11 @@ pub fn editorOpen(file_name: []const u8, allocator: std.mem.Allocator) !void {
             }
         };
         if (flag) {
-            state.S.num_lines += 1;
-            //        line.appendSlice("\r\n") catch |err| {
-            //            logger.logError("can't append \\r\\n to line end", err);
-            //            return err;
-            //        };
-            //            line.append('\x00') catch |err| {
-            //                logger.logError("can't append null byte", err);
-            //                return err;
-            //            };
             state.S.lines.append(line) catch |err| {
                 logger.logError("can't append line", err);
                 return err;
             };
+            state.S.num_lines += 1;
         }
     }
 }
