@@ -33,6 +33,21 @@ pub fn main() !void {
     defer state.deinitState();
     logger.logInfo("state inited");
 
+    var args = std.process.argsAlloc(allocator) catch |err| {
+        logger.logError("can't init args", err);
+        return err;
+    };
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len != 2) {
+        std.debug.print("path a file name\n", .{});
+        return;
+    }
+    const filename: []const u8 = args[1];
+    editor.editorOpen(filename, allocator) catch |err| {
+        return err;
+    };
+
     term.enableRawMode() catch |err| {
         return err;
     };
@@ -40,19 +55,6 @@ pub fn main() !void {
     defer {
         term.disableRaw();
         logger.logInfo("raw mode disabled");
-    }
-
-    var args = std.process.argsAlloc(allocator) catch |err| {
-        logger.logError("can't init args", err);
-        return err;
-    };
-    defer std.process.argsFree(allocator, args);
-
-    if (args.len >= 2) {
-        const filename: []const u8 = args[1];
-        editor.editorOpen(filename, allocator) catch |err| {
-            return err;
-        };
     }
 
     while (true) {
