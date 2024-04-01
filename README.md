@@ -1,7 +1,5 @@
 # OBEd
 
-OBEd - Ozon Bank Editor
-
 # Keybindings
 
 Movement: arrows (←,↑,→,↓)
