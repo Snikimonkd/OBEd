@@ -14,26 +14,26 @@ https://github.com/Snikimonkd/OBEd/assets/72211350/365e3657-f746-46cb-b523-01794
 
 # How to build
 
-Install zig
+Install zig:
 
 ```
 brew install zig
 ```
 
-Clone repo
+Clone repo:
 
 ```
 https://github.com/Snikimonkd/OBEd.git
 ```
 
-Build
+Build:
 
 ```
 cd OBEd
 make build
 ```
 
-Run
+Run:
 
 ```
 touch kek.txt
