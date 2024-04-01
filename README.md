@@ -26,7 +26,7 @@ Clone repo
 https://github.com/Snikimonkd/OBEd.git
 ```
 
-# Build
+Build
 
 ```
 cd OBEd
